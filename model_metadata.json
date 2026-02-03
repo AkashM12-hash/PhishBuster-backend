@@ -1,0 +1,21 @@
+{
+  "model_type": "Gradient Boosting",
+  "accuracy": 0.9625845996679863,
+  "precision": 0.9600451467268623,
+  "recall": 0.9734493018997482,
+  "f1_score": 0.9667007614501647,
+  "datasets_used": [
+    "CEAS Dataset"
+  ],
+  "total_emails": 39154,
+  "features": [
+    "num_words",
+    "num_unique_words",
+    "num_stopwords",
+    "num_links",
+    "num_unique_domains",
+    "num_email_addresses",
+    "num_spelling_errors",
+    "num_urgent_keywords"
+  ]
+}

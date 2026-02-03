@@ -1,0 +1,16 @@
+.env
+__pycache__/
+*.pyc
+
+# datasets
+*.csv
+
+# notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# ML artifacts (optional)
+*.pkl
+models/
+
+
