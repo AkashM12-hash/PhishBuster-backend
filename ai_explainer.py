@@ -8,13 +8,14 @@ AI explanation layer
 
 import os
 from typing import List, Optional
-from groq import Groq
 
-# ✅ Correct Groq model
+# Groq is OPTIONAL
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
+
 MODEL_NAME = "llama-3.1-8b-instant"
-
-# Groq client (reads GROQ_API_KEY from env)
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 
 def _build_prompt(
@@ -24,10 +25,6 @@ def _build_prompt(
     is_internal: bool,
     has_trusted_links: bool
 ) -> str:
-    """
-    Build a SAFE, metadata-only prompt
-    """
-
     return f"""
 You are a cybersecurity assistant.
 
@@ -64,10 +61,17 @@ def generate_ai_explanation(
     FAIL-SAFE: never affects detection flow.
     """
 
-    if not os.getenv("GROQ_API_KEY"):
+    # 🔒 AI is optional
+    if Groq is None:
+        return "Explanation unavailable (AI module not installed)."
+
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
         return "Explanation unavailable (AI service not configured)."
 
     try:
+        client = Groq(api_key=api_key)
+
         completion = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
@@ -92,5 +96,5 @@ def generate_ai_explanation(
         return completion.choices[0].message.content.strip()
 
     except Exception:
-        # 🔒 Fail safe
+        # 🔒 Absolute fail-safe
         return "This email was categorized based on detected security indicators."
