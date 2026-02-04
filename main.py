@@ -65,6 +65,34 @@ class ReportRequest(BaseModel):
     sender: Optional[str] = ""
     reportedBy: Optional[str] = ""
 
+def build_rule_explanation(category: str, details: dict, reasons: list | None):
+    points = []
+
+    links = details.get("links") or []
+    suspicious_words = details.get("suspiciousWords") or []
+
+    if links:
+        points.append("it contains suspicious links")
+
+    if suspicious_words:
+        points.append("it uses words commonly seen in phishing or scam messages")
+
+    if reasons:
+        points.append("multiple security rules were triggered")
+
+    if category == "PHISHING":
+        intro = "This email was marked as PHISHING because"
+    elif category == "SUSPICIOUS":
+        intro = "This email was marked as SUSPICIOUS because"
+    else:
+        return "This email appears safe based on current security checks."
+
+    if not points:
+        return intro + " it shows patterns commonly used in phishing attacks."
+
+    return intro + " " + ", and ".join(points) + "."
+
+
 # ==========================================================
 # ANALYSIS MESSAGE BUILDER (Keep your original logic)
 # ==========================================================
@@ -166,20 +194,34 @@ def analyze_outlook_email(email: OutlookEmailRequest):
     # INTERNAL HR SAFE GUARD
     # ===============================
     from step2_features import has_trusted_link
-
     # ===============================
     # INTERNAL HR SAFE GUARD
     # ===============================
     if internal and not has_unknown_links(full_text):
+        details = {
+            "links": extract_links(full_text),
+            "suspiciousWords": extract_suspicious_words(full_text)
+        }
+
+        analysis_msg = build_rule_explanation("SAFE", details, ["internal trusted email"])
+
+        ai_explanation = generate_ai_explanation(
+            category="SAFE",
+            ml_confidence=None,
+            rule_hits=[],
+            is_internal=internal,
+            has_trusted_links=True
+        )
+
         return {
             "category": "SAFE",
             "isInternal": True,
             "reason": "Internal HR communication",
-            "aiExplanation": (
-                "This email appears to be an internal HR communication "
-                "containing only trusted links. No phishing indicators were detected."
-            )
+            "details": details,
+            "analysisMessage": analysis_msg,
+            "aiExplanation": ai_explanation
         }
+
 
 
 
@@ -211,13 +253,22 @@ def analyze_outlook_email(email: OutlookEmailRequest):
             is_internal=internal,
             has_trusted_links=True
         )
+       
+        details = {
+            "links": extract_links(full_text),
+            "suspiciousWords": extract_suspicious_words(full_text)
+        }
+
+        analysis_msg = build_rule_explanation("PHISHING", details, strong_hits)
 
         return {
             "category": "PHISHING",
             "confidence": confidence,
             "isInternal": internal,
             "reason": "; ".join(strong_hits),
-            "aiExplanation": ai_explanation
+            "details": details,
+            "analysisMessage": analysis_msg,     # ✅ Always available
+            "aiExplanation": ai_explanation       # ✅ Optional
         }
 
     # ===============================
@@ -240,12 +291,22 @@ def analyze_outlook_email(email: OutlookEmailRequest):
             has_trusted_links=True
         )
 
+        details = {
+            "links": extract_links(full_text),
+            "suspiciousWords": extract_suspicious_words(full_text)
+        }
+
+        analysis_msg = build_rule_explanation("SUSPICIOUS", details, medium_hits)
+
         return {
             "category": "SUSPICIOUS",
             "isInternal": internal,
             "reason": "; ".join(medium_hits),
+            "details": details,
+            "analysisMessage": analysis_msg,     # ✅ Always available
             "aiExplanation": ai_explanation
         }
+
 
     # ===============================
     # SAFE
@@ -258,14 +319,20 @@ def analyze_outlook_email(email: OutlookEmailRequest):
         has_trusted_links=True
     )
 
+    details = {
+        "links": extract_links(full_text),
+        "suspiciousWords": extract_suspicious_words(full_text)
+    }
+
+    analysis_msg = build_rule_explanation("SAFE", details, [])
+
     return {
         "category": "SAFE",
         "isInternal": internal,
         "reason": "No phishing indicators detected",
-        "aiExplanation": (
-        "This email does not show signs of phishing. "
-        "No suspicious links, credential requests, or risky patterns were detected."
-    )
+        "details": details,
+        "analysisMessage": analysis_msg,     # ✅ Rule-based explanation
+        "aiExplanation": ai_explanation      # ✅ Optional
     }
 
 
