@@ -1,4 +1,8 @@
 # main.py - FastAPI Backend with ML Integration for Outlook Add-in
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from dotenv import load_dotenv
 from datetime import datetime
 load_dotenv()
@@ -17,6 +21,12 @@ from step2_features import (
 )
 ADMIN_REPORT_EMAIL = "VinayChetti@outlook.com"  # TEMP
 REPORTING_ENABLED = True
+SMTP_SERVER = "smtp.office365.com"
+SMTP_PORT = 587
+
+SENDER_EMAIL = os.getenv("SENDER_EMAIL")
+SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+
 app = FastAPI(title="Phishing Detection — ML + Rule-Based (Outlook Integration)")
 
 # ---------- CORS ----------
@@ -469,37 +479,52 @@ async def startup_event():
 
 @app.post("/report-to-admin")
 def report_to_admin(report: ReportRequest):
-    """
-    User-initiated report to Admin (TEMP)
-    """
-
     if not REPORTING_ENABLED:
         return {"status": "disabled"}
 
-    # Basic validation
     if report.category not in ["PHISHING", "SUSPICIOUS"]:
         return {
             "status": "ignored",
             "reason": "Only PHISHING or SUSPICIOUS emails can be reported"
         }
 
-    # Build safe report payload
-    report_payload = {
-        "to": ADMIN_REPORT_EMAIL,
-        "messageId": report.messageId,
-        "category": report.category,
-        "confidence": report.confidence,
-        "ruleHits": report.ruleHits,
-        "sender": report.sender,
-        "reportedBy": report.reportedBy,
-        "reportedAt": datetime.utcnow().isoformat()
-    }
+    subject = f"🚨 PhishBuster Alert: {report.category} Email Reported"
+    body = f"""
+A suspicious email was reported by PhishBuster.
 
-    # 🔒 TEMP: just log (no email yet)
-    print("🚨 ADMIN REPORT (TEMP)")
-    print(report_payload)
+Category: {report.category}
+Confidence: {report.confidence}
+Sender: {report.sender}
+Message ID: {report.messageId}
+Reported By: {report.reportedBy}
 
-    return {
-        "status": "reported",
-        "sentTo": ADMIN_REPORT_EMAIL
-    }
+Rule Hits:
+{", ".join(report.ruleHits) if report.ruleHits else "None"}
+"""
+
+    msg = MIMEMultipart()
+    msg["From"] = SENDER_EMAIL
+    msg["To"] = ADMIN_REPORT_EMAIL
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    try:
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
+        server.starttls()  # 🔐 Secure connection
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
+        server.sendmail(SENDER_EMAIL, ADMIN_REPORT_EMAIL, msg.as_string())
+        server.quit()
+
+        print("✅ Email sent to admin via Outlook SMTP")
+
+        return {
+            "status": "reported",
+            "sentTo": ADMIN_REPORT_EMAIL
+        }
+
+    except Exception as e:
+        print("❌ Failed to send email:", e)
+        return {
+            "status": "error",
+            "message": "Failed to send email to admin"
+        }
