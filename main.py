@@ -479,6 +479,10 @@ async def startup_event():
 
 @app.post("/report-to-admin")
 def report_to_admin(report: ReportRequest):
+    print("📨 /report-to-admin called")
+    print("SENDER_EMAIL =", SENDER_EMAIL)
+    print("SENDER_PASSWORD is set =", bool(SENDER_PASSWORD))
+
     if not REPORTING_ENABLED:
         return {"status": "disabled"}
 
