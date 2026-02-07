@@ -86,15 +86,16 @@ def extract_domain(sender: str) -> str:
 
 import re
 
-def normalize_email(sender: str) -> str:
+def extract_email_address(sender: str) -> str:
     if not sender:
         return ""
-    # Extract email from formats like: Name <email@domain.com>
     match = re.search(r'[\w\.-]+@[\w\.-]+', sender)
-    return match.group(0).lower() if match else sender.lower()
+    if match:
+        return match.group(0).lower()
+    return sender.lower()
 
 def is_internal_email(sender: str) -> bool:
-    email = normalize_email(sender)
+    email = extract_email_address(sender)
     return email.endswith("@" + INTERNAL_COMPANY_DOMAIN)
 
 

@@ -18,7 +18,7 @@ from step2_features import (
     extract_suspicious_words,
     get_suspicious_links,
     get_risk_indicators,
-    normalize_email
+    extract_email_address
 )
 ADMIN_REPORT_EMAIL = "VinayChetti@outlook.com"  # TEMP
 REPORTING_ENABLED = True
@@ -201,6 +201,9 @@ def analyze_outlook_email(email: OutlookEmailRequest):
 
     full_text = f"{email.subject} {email.body}"
     internal = is_internal_email(email.sender or "")
+    print("DEBUG sender  raw =", email.sender)
+    print("DEBUG sender normalized =", extract_email_address(email.sender ot ""))
+    print("DEBUG internal =", internal)
     # ===============================
     # INTERNAL HR SAFE GUARD
     # ===============================
@@ -223,10 +226,7 @@ def analyze_outlook_email(email: OutlookEmailRequest):
             is_internal=internal,
             has_trusted_links=True
         )
-        print("DEBUG sender  raw =", email.sender)
-        print("DEBUG sender normalized =", normalize_email(email.sender))
-        print("DEBUG internal =", internal)
-
+  
 
         return {
             "category": "SAFE",
@@ -236,6 +236,7 @@ def analyze_outlook_email(email: OutlookEmailRequest):
             "analysisMessage": analysis_msg,
             "aiExplanation": ai_explanation
         }
+
 
 
 
