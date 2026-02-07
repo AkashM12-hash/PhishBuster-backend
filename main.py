@@ -222,6 +222,9 @@ def analyze_outlook_email(email: OutlookEmailRequest):
             is_internal=internal,
             has_trusted_links=True
         )
+        print("DEBUG sender =", email.sender)
+        print("DEBUG internal =", internal)
+
 
         return {
             "category": "SAFE",
@@ -486,25 +489,32 @@ def report_to_admin(report: ReportRequest):
     if not REPORTING_ENABLED:
         return {"status": "disabled"}
 
-    if report.category not in ["PHISHING", "SUSPICIOUS"]:
+    # ✅ SAFETY CHECK
+    if not SENDER_EMAIL or not SENDER_PASSWORD:
+        return {
+            "status": "error",
+            "message": "Email credentials not configured on server"
+        }
+
+    if report.category not in ["PHISHING"]:
         return {
             "status": "ignored",
-            "reason": "Only PHISHING or SUSPICIOUS emails can be reported"
+            "reason": "Only PHISHING emails are auto-reported"
         }
 
     subject = f"🚨 PhishBuster Alert: {report.category} Email Reported"
     body = f"""
-A suspicious email was reported by PhishBuster.
+    A phishing email was reported automatically.
 
-Category: {report.category}
-Confidence: {report.confidence}
-Sender: {report.sender}
-Message ID: {report.messageId}
-Reported By: {report.reportedBy}
+    Category: {report.category}
+    Confidence: {report.confidence}
+    Sender: {report.sender}
+    Message ID: {report.messageId}
+    Reported By: {report.reportedBy}
 
-Rule Hits:
-{", ".join(report.ruleHits) if report.ruleHits else "None"}
-"""
+    Rule Hits:
+    {", ".join(report.ruleHits) if report.ruleHits else "None"}
+    """
 
     msg = MIMEMultipart()
     msg["From"] = SENDER_EMAIL
@@ -513,8 +523,8 @@ Rule Hits:
     msg.attach(MIMEText(body, "plain"))
 
     try:
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-        server.starttls()  # 🔐 Secure connection
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)  # ✅ add timeout
+        server.starttls()
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, ADMIN_REPORT_EMAIL, msg.as_string())
         server.quit()
@@ -530,5 +540,6 @@ Rule Hits:
         print("❌ Failed to send email:", e)
         return {
             "status": "error",
-            "message": "Failed to send email to admin"
+            "message": str(e)
         }
+
