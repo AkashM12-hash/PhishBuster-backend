@@ -17,7 +17,8 @@ from step2_features import (
     extract_links, 
     extract_suspicious_words,
     get_suspicious_links,
-    get_risk_indicators
+    get_risk_indicators,
+    normalize_email
 )
 ADMIN_REPORT_EMAIL = "VinayChetti@outlook.com"  # TEMP
 REPORTING_ENABLED = True
@@ -222,7 +223,8 @@ def analyze_outlook_email(email: OutlookEmailRequest):
             is_internal=internal,
             has_trusted_links=True
         )
-        print("DEBUG sender =", email.sender)
+        print("DEBUG sender  raw =", email.sender)
+        print("DEBUG sender normalized =", normalize_email(email.sender))
         print("DEBUG internal =", internal)
 
 

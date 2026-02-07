@@ -84,8 +84,19 @@ def extract_domain(sender: str) -> str:
     return sender.split("@")[-1].lower() if sender and "@" in sender else ""
 
 
+import re
+
+def normalize_email(sender: str) -> str:
+    if not sender:
+        return ""
+    # Extract email from formats like: Name <email@domain.com>
+    match = re.search(r'[\w\.-]+@[\w\.-]+', sender)
+    return match.group(0).lower() if match else sender.lower()
+
 def is_internal_email(sender: str) -> bool:
-    return sender.lower().endswith("@" + INTERNAL_COMPANY_DOMAIN)
+    email = normalize_email(sender)
+    return email.endswith("@" + INTERNAL_COMPANY_DOMAIN)
+
 
 
 def is_trusted_public_domain(domain: str) -> bool:
