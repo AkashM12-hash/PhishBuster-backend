@@ -202,7 +202,7 @@ def analyze_outlook_email(email: OutlookEmailRequest):
     full_text = f"{email.subject} {email.body}"
     internal = is_internal_email(email.sender or "")
     print("DEBUG sender  raw =", email.sender)
-    print("DEBUG sender normalized =", extract_email_address(email.sender ot ""))
+    print("DEBUG sender normalized =", extract_email_address(email.sender or ""))
     print("DEBUG internal =", internal)
     # ===============================
     # INTERNAL HR SAFE GUARD
