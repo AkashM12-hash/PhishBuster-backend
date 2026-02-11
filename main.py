@@ -63,7 +63,8 @@ class EmailRequest(BaseModel):
     body: str
 
 class OutlookEmailRequest(BaseModel):
-    sender: Optional[str] = ""
+    senderName: Optional[str] = ""
+    senderEmail: Optional[str] = ""
     subject: str
     body: str
     messageId: str = ""
@@ -193,49 +194,19 @@ from step2_features import (
     has_shortened_link,
     brand_impersonation_link,
     requests_personal_info,
-    has_unknown_links
+    has_unknown_links,
+    is_display_name_impersonation
 )
 
 @app.post("/analyze-outlook")
 def analyze_outlook_email(email: OutlookEmailRequest):
 
     full_text = f"{email.subject} {email.body}"
-    internal = is_internal_email(email.sender or "")
-    print("DEBUG sender  raw =", email.sender)
-    print("DEBUG sender normalized =", extract_email_address(email.sender or ""))
+    internal = is_internal_email(email.senderEmail or "")
+    print("DEBUG sender  raw =", email.senderEmail)
+    print("DEBUG sender normalized =", extract_email_address(email.senderEmail or ""))
     print("DEBUG internal =", internal)
-    # ===============================
-    # INTERNAL HR SAFE GUARD
-    # ===============================
     from step2_features import has_trusted_link
-    # ===============================
-    # INTERNAL HR SAFE GUARD
-    # ===============================
-    if internal and not has_unknown_links(full_text):
-        details = {
-            "links": extract_links(full_text),
-            "suspiciousWords": extract_suspicious_words(full_text)
-        }
-
-        analysis_msg = build_rule_explanation("SAFE", details, ["internal trusted email"])
-
-        ai_explanation = generate_ai_explanation(
-            category="SAFE",
-            ml_confidence=None,
-            rule_hits=[],
-            is_internal=internal,
-            has_trusted_links=True
-        )
-  
-
-        return {
-            "category": "SAFE",
-            "isInternal": True,
-            "reason": "Internal HR communication",
-            "details": details,
-            "analysisMessage": analysis_msg,
-            "aiExplanation": ai_explanation
-        }
 
 
 
@@ -245,18 +216,21 @@ def analyze_outlook_email(email: OutlookEmailRequest):
     # STRONG RULES → PHISHING
     # ===============================
     strong_hits = []
-
-    if requests_credentials(full_text) and not internal:
+    if is_display_name_impersonation(email.senderName or "", email.senderEmail or ""):
+        strong_hits.append("display name impersonation")
+    if requests_credentials(full_text) :
         strong_hits.append("credential request")
 
-    if has_ip_link(full_text)  and not internal:
+    if has_ip_link(full_text)  :
         strong_hits.append("IP-based link")
 
-    if has_shortened_link(full_text) and not internal:
+    if has_shortened_link(full_text) :
         strong_hits.append("shortened URL")
 
-    if brand_impersonation_link(full_text)  and not internal:
+    if brand_impersonation_link(full_text) :
         strong_hits.append("brand impersonation")
+      # ✅ NEW: Display name impersonation
+
 
     if strong_hits:
         ml_result = detector.predict(email.dict())
@@ -285,6 +259,39 @@ def analyze_outlook_email(email: OutlookEmailRequest):
             "details": details,
             "analysisMessage": analysis_msg,     # ✅ Always available
             "aiExplanation": ai_explanation       # ✅ Optional
+        }
+
+    
+    # ===============================
+    # INTERNAL HR SAFE GUARD
+    # ===============================
+    if (internal and 
+        not has_unknown_links(full_text)
+        and not requests_credentials(full_text)
+        and not requests_personal_info(full_text)):
+        details = {
+            "links": extract_links(full_text),
+            "suspiciousWords": extract_suspicious_words(full_text)
+        }
+
+        analysis_msg = build_rule_explanation("SAFE", details, ["internal trusted email"])
+
+        ai_explanation = generate_ai_explanation(
+            category="SAFE",
+            ml_confidence=None,
+            rule_hits=[],
+            is_internal=internal,
+            has_trusted_links=True
+        )
+  
+
+        return {
+            "category": "SAFE",
+            "isInternal": True,
+            "reason": "Internal HR communication",
+            "details": details,
+            "analysisMessage": analysis_msg,
+            "aiExplanation": ai_explanation
         }
 
     # ===============================

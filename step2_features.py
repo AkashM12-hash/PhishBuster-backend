@@ -116,6 +116,44 @@ def has_trusted_link(text: str) -> bool:
     return False
 
 
+# ===============================
+# DISPLAY NAME IMPERSONATION
+# ===============================
+
+# Protect important internal names / roles
+PROTECTED_DISPLAY_NAMES = [
+    "venkateswarlu mandula",   # CEO
+    "human resources",
+    "hr",
+    "finance",
+    "accounts",
+    "it support",
+    "admin",
+    "security team"
+]
+
+def normalize_name(name: str) -> str:
+    return re.sub(r"\s+", " ", name.lower().strip())
+
+def is_display_name_impersonation(sender_name: str, sender_email: str) -> bool:
+    if not sender_name or not sender_email:
+        return False
+
+    name = normalize_name(sender_name)
+    email = extract_email_address(sender_email)
+
+    # If email is internal, allow it (legit HR, CEO, etc.)
+    if email.endswith("@" + INTERNAL_COMPANY_DOMAIN):
+        return False
+
+    # If display name matches protected internal names BUT email is external → impersonation
+    for protected in PROTECTED_DISPLAY_NAMES:
+        if protected in name:
+            return True
+
+    return False
+
+
 
 # ===============================
 # STRONG RULES → PHISHING
