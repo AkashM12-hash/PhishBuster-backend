@@ -198,39 +198,40 @@ from step2_features import (
     is_display_name_impersonation
 )
 
+
 @app.post("/analyze-outlook")
 def analyze_outlook_email(email: OutlookEmailRequest):
 
     full_text = f"{email.subject} {email.body}"
     internal = is_internal_email(email.senderEmail or "")
-    print("DEBUG sender  raw =", email.senderEmail)
+
+    print("DEBUG sender raw =", email.senderEmail)
     print("DEBUG sender normalized =", extract_email_address(email.senderEmail or ""))
     print("DEBUG internal =", internal)
-    from step2_features import has_trusted_link
-
-
-
-
 
     # ===============================
-    # STRONG RULES → PHISHING
+    # STRONG RULES → ALWAYS PHISHING
     # ===============================
     strong_hits = []
+
     if is_display_name_impersonation(email.senderName or "", email.senderEmail or ""):
         strong_hits.append("display name impersonation")
-    if requests_credentials(full_text) :
+
+    if requests_credentials(full_text):
         strong_hits.append("credential request")
 
-    if has_ip_link(full_text)  :
+    if has_ip_link(full_text):
         strong_hits.append("IP-based link")
 
-    if has_shortened_link(full_text) :
+    if has_shortened_link(full_text):
         strong_hits.append("shortened URL")
 
-    if brand_impersonation_link(full_text) :
+    if brand_impersonation_link(full_text):
         strong_hits.append("brand impersonation")
-      # ✅ NEW: Display name impersonation
 
+    # 🔴 NEW RULE: External + asks personal info = PHISHING
+    if requests_personal_info(full_text) and not internal:
+        strong_hits.append("external personal information request")
 
     if strong_hits:
         ml_result = detector.predict(email.dict())
@@ -243,7 +244,7 @@ def analyze_outlook_email(email: OutlookEmailRequest):
             is_internal=internal,
             has_trusted_links=True
         )
-       
+
         details = {
             "links": extract_links(full_text),
             "suspiciousWords": extract_suspicious_words(full_text)
@@ -257,39 +258,6 @@ def analyze_outlook_email(email: OutlookEmailRequest):
             "isInternal": internal,
             "reason": "; ".join(strong_hits),
             "details": details,
-            "analysisMessage": analysis_msg,     # ✅ Always available
-            "aiExplanation": ai_explanation       # ✅ Optional
-        }
-
-    
-    # ===============================
-    # INTERNAL HR SAFE GUARD
-    # ===============================
-    if (internal and 
-        not has_unknown_links(full_text)
-        and not requests_credentials(full_text)
-        and not requests_personal_info(full_text)):
-        details = {
-            "links": extract_links(full_text),
-            "suspiciousWords": extract_suspicious_words(full_text)
-        }
-
-        analysis_msg = build_rule_explanation("SAFE", details, ["internal trusted email"])
-
-        ai_explanation = generate_ai_explanation(
-            category="SAFE",
-            ml_confidence=None,
-            rule_hits=[],
-            is_internal=internal,
-            has_trusted_links=True
-        )
-  
-
-        return {
-            "category": "SAFE",
-            "isInternal": True,
-            "reason": "Internal HR communication",
-            "details": details,
             "analysisMessage": analysis_msg,
             "aiExplanation": ai_explanation
         }
@@ -299,8 +267,9 @@ def analyze_outlook_email(email: OutlookEmailRequest):
     # ===============================
     medium_hits = []
 
-    if requests_personal_info(full_text):
-        medium_hits.append("personal information request")
+    # 🟡 Internal + asks personal info = SUSPICIOUS
+    if requests_personal_info(full_text) and internal:
+        medium_hits.append("internal personal information request")
 
     if has_unknown_links(full_text):
         medium_hits.append("external links")
@@ -326,10 +295,9 @@ def analyze_outlook_email(email: OutlookEmailRequest):
             "isInternal": internal,
             "reason": "; ".join(medium_hits),
             "details": details,
-            "analysisMessage": analysis_msg,     # ✅ Always available
+            "analysisMessage": analysis_msg,
             "aiExplanation": ai_explanation
         }
-
 
     # ===============================
     # SAFE
@@ -354,9 +322,10 @@ def analyze_outlook_email(email: OutlookEmailRequest):
         "isInternal": internal,
         "reason": "No phishing indicators detected",
         "details": details,
-        "analysisMessage": analysis_msg,     # ✅ Rule-based explanation
-        "aiExplanation": ai_explanation      # ✅ Optional
+        "analysisMessage": analysis_msg,
+        "aiExplanation": ai_explanation
     }
+
 
 
 
