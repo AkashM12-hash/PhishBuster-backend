@@ -98,15 +98,22 @@ def is_internal_email(sender: str) -> bool:
     email = extract_email_address(sender)
     return email.endswith("@" + INTERNAL_COMPANY_DOMAIN)
 
+def clean_url(url: str) -> str:
+    # remove quotes and html leftovers
+    url = url.strip().strip('"').strip("'").strip(">")
+    url = url.replace("&amp;", "&")
+    return url
 
 
 def is_trusted_public_domain(domain: str) -> bool:
     return any(domain.endswith(d) for d in TRUSTED_PUBLIC_DOMAINS)
+
 def has_trusted_link(text: str) -> bool:
     links = extract_links(text)
 
     for link in links:
         try:
+            link=clean_url(link)
             domain = urlparse(link).netloc.lower()
             if is_trusted_public_domain(domain):
                 return True
