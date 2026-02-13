@@ -20,6 +20,7 @@ TRUSTED_PUBLIC_DOMAINS = [
     "office365.com",
     "microsoftonline.com",
     "outlook.com",
+    "aka.ms",
 
     # LinkedIn
     "linkedin.com",
@@ -106,7 +107,8 @@ def clean_url(url: str) -> str:
 
 
 def is_trusted_public_domain(domain: str) -> bool:
-    return any(domain.endswith(d) for d in TRUSTED_PUBLIC_DOMAINS)
+    domain = domain.strip().strip('"').strip("'").lower()
+    return any(domain == d or domain.endswith("." + d) for d in TRUSTED_PUBLIC_DOMAINS)
 
 def has_trusted_link(text: str) -> bool:
     links = extract_links(text)
