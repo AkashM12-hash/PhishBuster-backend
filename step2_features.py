@@ -42,7 +42,13 @@ TRUSTED_PUBLIC_DOMAINS = [
     "go.microsoft.com",
     "apple.com",
     "itunes.apple.com",
-    "play.google.com",
+    "play.google.com"
+  
+    # Zoho (Company tools)
+    "zoho.com",
+    "zoho.in",
+    "accounts.zoho.in",
+    "people.zoho.in"
 
 ]
 
@@ -77,8 +83,8 @@ BRAND_KEYWORDS = [
     "office",
     "office365",
     "gmail",
-    "google",
-    "bank"
+    "google"
+    
 ]
 
 # ===============================
@@ -93,7 +99,7 @@ def extract_domain(sender: str) -> str:
     return sender.split("@")[-1].lower() if sender and "@" in sender else ""
 
 
-import re
+
 
 def extract_email_address(sender: str) -> str:
     if not sender:
@@ -210,8 +216,9 @@ def has_shortened_link(text: str) -> bool:
 
     for link in links:
         try:
-            domain = urlparse(link).netloc.lower()
-
+            domain = urlparse(link).netloc.lower().split(":")[0]
+            if domain.endswith(INTERNAL_COMPANY_DOMAIN):
+                continue
             # Ignore trusted domains completely
             if is_trusted_public_domain(domain):
                 continue
@@ -293,7 +300,7 @@ def has_unknown_links(text: str) -> bool:
 
 def extract_suspicious_words(text: str):
     keywords = [
-        "urgent", "verify", "account", "login",
+        "urgent", "verify", "login",
         "password", "otp", "bank", "click here",
         "immediately", "suspended"
     ]
