@@ -36,6 +36,14 @@ TRUSTED_PUBLIC_DOMAINS = [
     "stripe.com",
     "paypal.com",
     "github.com",
+    # others-2
+    "urldefense.com",
+    "svc.ms",
+    "go.microsoft.com",
+    "apple.com",
+    "itunes.apple.com",
+    "play.google.com",
+
 ]
 
 SHORTENED_URLS = ["bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly"]
@@ -221,38 +229,32 @@ def has_shortened_link(text: str) -> bool:
 
 
 def brand_impersonation_link(text: str) -> bool:
-    """
-    Detects brand impersonation such as:
-    outlook-support-login.xyz
-    microsoft-secure-login.com
-    """
-
-    text_lower = text.lower()
     links = extract_links(text)
 
-    BRAND_TO_DOMAINS = {
-        "outlook": ["outlook.com", "microsoft.com"],
-        "microsoft": ["microsoft.com"],
-        "office": ["office.com", "office365.com"],
-        "office365": ["office365.com"],
-        "gmail": ["google.com", "gmail.com"],
-        "google": ["google.com"],
-        "bank": []  # banks rarely send login links
-    }
+    BRAND_KEYWORDS = ["microsoft", "office", "office365", "outlook", "google", "gmail"]
 
     for link in links:
         try:
             domain = urlparse(link).netloc.lower()
 
-            for brand, allowed_domains in BRAND_TO_DOMAINS.items():
-                if brand in text_lower:
-                    # Brand keyword + untrusted domain = impersonation
-                    if not is_trusted_public_domain(domain):
-                        return True
+            # Ignore internal company domain
+            if domain.endswith(INTERNAL_COMPANY_DOMAIN):
+                continue
+
+            # Ignore trusted public domains (microsoft.com, aka.ms, linkedin.com, etc.)
+            if is_trusted_public_domain(domain):
+                continue
+
+            # If domain contains brand keyword but is not trusted → impersonation
+            for brand in BRAND_KEYWORDS:
+                if brand in domain:
+                    return True
+
         except:
             continue
 
     return False
+
 
 
 
