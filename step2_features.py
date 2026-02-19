@@ -49,6 +49,11 @@ TRUSTED_PUBLIC_DOMAINS = [
     "zoho.in",
     "accounts.zoho.in",
     "people.zoho.in"
+    "teams.mail.microsoft",
+    "mail.microsoft",
+    "svc.ms",
+    "r-notifyp.svc.ms",   # optional, subdomain already covered by svc.ms
+
 
 ]
 
@@ -289,7 +294,7 @@ def has_unknown_links(text: str) -> bool:
 
             return True
         except:
-            return True
+            continue
 
     return False
 

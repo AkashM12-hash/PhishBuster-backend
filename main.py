@@ -198,11 +198,25 @@ from step2_features import (
     is_display_name_impersonation
 )
 
+import re
+
+def strip_html(html: str) -> str:
+    # Remove tags
+    text = re.sub(r"<[^>]+>", " ", html)
+    # Decode HTML entities
+    text = text.replace("&nbsp;", " ").replace("&amp;", "&")
+    # Collapse spaces
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
 @app.post("/analyze-outlook")
 def analyze_outlook_email(email: OutlookEmailRequest):
+    raw_body = email.body or ""
+    raw_subject=email.subject or ""
+    clean_body = strip_html(raw_body)
+    clean_subject=strip_html(raw_subject)
 
-    full_text = f"{email.subject} {email.body}"
+    full_text = f"{clean_subject} {clean_body}"
     internal = is_internal_email(email.senderEmail or "")
 
     print("DEBUG sender raw =", email.senderEmail)
@@ -246,7 +260,7 @@ def analyze_outlook_email(email: OutlookEmailRequest):
         )
 
         details = {
-            "links": extract_links(full_text),
+            "links": extract_links(raw_body),
             "suspiciousWords": extract_suspicious_words(full_text)
         }
 
@@ -273,6 +287,9 @@ def analyze_outlook_email(email: OutlookEmailRequest):
 
     if has_unknown_links(full_text):
         medium_hits.append("external links")
+    # If email has links but ALL are trusted → do NOT mark suspicious
+  
+
 
     if medium_hits:
         ai_explanation = generate_ai_explanation(
@@ -284,7 +301,7 @@ def analyze_outlook_email(email: OutlookEmailRequest):
         )
 
         details = {
-            "links": extract_links(full_text),
+            "links": extract_links(raw_body),
             "suspiciousWords": extract_suspicious_words(full_text)
         }
 
@@ -311,7 +328,7 @@ def analyze_outlook_email(email: OutlookEmailRequest):
     )
 
     details = {
-        "links": extract_links(full_text),
+        "links": extract_links(raw_body),
         "suspiciousWords": extract_suspicious_words(full_text)
     }
 
