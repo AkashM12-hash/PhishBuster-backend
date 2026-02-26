@@ -34,6 +34,7 @@ app = FastAPI(title="Phishing Detection — ML + Rule-Based (Outlook Integration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://phishbuster-addin.onrender.com",
         "https://localhost:3000",
         "http://localhost:3000",
         "https://localhost:3001",
