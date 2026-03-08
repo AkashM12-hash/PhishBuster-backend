@@ -48,11 +48,14 @@ TRUSTED_PUBLIC_DOMAINS = [
     "zoho.com",
     "zoho.in",
     "accounts.zoho.in",
-    "people.zoho.in"
+    "people.zoho.in",
     "teams.mail.microsoft",
     "mail.microsoft",
     "svc.ms",
     "r-notifyp.svc.ms",   # optional, subdomain already covered by svc.ms
+    "udemy.com",
+    "udemymail.com",
+    "udemycdn.com"
 
 
 ]
@@ -190,13 +193,17 @@ def is_display_name_impersonation(sender_name: str, sender_email: str) -> bool:
 def requests_credentials(text: str) -> bool:
     t = text.lower()
 
+    # ignore normal OTP emails
+    if "verification code" in t or "otp" in t:
+        if "enter password" not in t and "confirm password" not in t:
+            return False
+
     STRICT_PATTERNS = [
         r"\benter your password\b",
-        r"\bverify your account\b",
-        r"\benter otp\b",
-        r"\bone time password\b",
-        r"\bverification code\b",
-        r"\blog in to continue\b"
+        r"\bconfirm your password\b",
+        r"\breset your password\b",
+        r"\blogin with your password\b",
+        r"\bverify your account\b"
     ]
 
     return any(re.search(p, t) for p in STRICT_PATTERNS)
