@@ -2,6 +2,7 @@
 import re
 from typing import List
 from urllib.parse import urlparse
+import difflib
 
 ADMIN_REPORT_EMAIL = "VinayChetti@outlook.com"  # TEMP
 REPORTING_ENABLED = True
@@ -42,7 +43,7 @@ TRUSTED_PUBLIC_DOMAINS = [
     "go.microsoft.com",
     "apple.com",
     "itunes.apple.com",
-    "play.google.com"
+    "play.google.com",
   
     # Zoho (Company tools)
     "zoho.com",
@@ -58,6 +59,22 @@ TRUSTED_PUBLIC_DOMAINS = [
     "udemycdn.com"
 
 
+]
+# ===============================
+# LOOK-ALIKE DOMAIN PROTECTION
+# ===============================
+
+PROTECTED_BRAND_DOMAINS = [
+    "paypal.com",
+    "amazon.com",
+    "microsoft.com",
+    "apple.com",
+    "google.com",
+    "facebook.com",
+    "linkedin.com",
+    "netflix.com",
+    "bankofamerica.com",
+    "chase.com"
 ]
 
 SHORTENED_URLS = ["bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly"]
@@ -274,9 +291,65 @@ def brand_impersonation_link(text: str) -> bool:
 
     return False
 
+def extract_domain_from_url(url: str) -> str:
+    try:
+        url = clean_url(url)
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        return domain.split(":")[0]
+    except:
+        return ""
+
+def domain_similarity(domain1: str, domain2: str) -> float:
+    return difflib.SequenceMatcher(None, domain1, domain2).ratio()
+def detect_lookalike_domains(text: str):
+    """
+    Detect domains that look similar to protected brands.
+    Example: paypaI.com vs paypal.com
+    """
+
+    links = extract_links(text)
+    detected = []
+
+    for link in links:
+        try:
+            domain = extract_domain_from_url(link)
+
+            # Skip trusted domains
+            if is_trusted_public_domain(domain):
+                continue
+
+            for legit in PROTECTED_BRAND_DOMAINS:
+                if domain.endswith("." + legit):
+                    continue
+                similarity = domain_similarity(domain, legit)
+
+                # Similar but not identical
+                if similarity > 0.9 and domain != legit:
+                    detected.append({
+                        "domain": domain,
+                        "impersonates": legit,
+                        "similarity": round(similarity, 2)
+                    })
+
+        except:
+            continue
+
+    return detected
 
 
 
+def get_lookalike_domains(text: str):
+    results = detect_lookalike_domains(text)
+
+    explanations = []
+
+    for r in results:
+        explanations.append(
+            f"{r['domain']} may be impersonating {r['impersonates']}"
+        )
+
+    return explanations
 # ===============================
 # MEDIUM RULES → SUSPICIOUS
 # ===============================

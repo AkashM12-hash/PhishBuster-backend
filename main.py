@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from ai_explainer import generate_ai_explanation
 
 from typing import Optional, List
+from graph_client import move_email_to_quarantine
+from graph_config import GRAPH_ENABLED
 from step2_features import (
     extract_links, 
     extract_suspicious_words,
@@ -66,6 +68,7 @@ class EmailRequest(BaseModel):
 class OutlookEmailRequest(BaseModel):
     senderName: Optional[str] = ""
     senderEmail: Optional[str] = ""
+    userEmail: Optional[str] = ""
     subject: str
     body: str
     messageId: str = ""
@@ -83,8 +86,11 @@ def build_rule_explanation(category: str, details: dict, reasons: list | None):
 
     links = details.get("links") or []
     suspicious_words = details.get("suspiciousWords") or []
+    lookalikes = details.get("lookalikeDomains") or []
 
-    if links:
+    if lookalikes:
+        points.append("it contains a domain that impersonates a trusted brand")
+    if links and category != "SAFE":
         points.append("it contains suspicious links")
 
     if suspicious_words:
@@ -196,7 +202,9 @@ from step2_features import (
     brand_impersonation_link,
     requests_personal_info,
     has_unknown_links,
-    is_display_name_impersonation
+    is_display_name_impersonation,
+
+    get_lookalike_domains
 )
 
 import re
@@ -228,6 +236,10 @@ def analyze_outlook_email(email: OutlookEmailRequest):
     # STRONG RULES → ALWAYS PHISHING
     # ===============================
     strong_hits = []
+    lookalike_domains = get_lookalike_domains(full_text)
+
+    if lookalike_domains:
+        strong_hits.append("look-alike domain detected")
 
     if is_display_name_impersonation(email.senderName or "", email.senderEmail or ""):
         strong_hits.append("display name impersonation")
@@ -244,13 +256,23 @@ def analyze_outlook_email(email: OutlookEmailRequest):
     if brand_impersonation_link(full_text):
         strong_hits.append("brand impersonation")
 
+
     # 🔴 NEW RULE: External + asks personal info = PHISHING
     if requests_personal_info(full_text) and not internal:
         strong_hits.append("external personal information request")
 
     if strong_hits:
-        ml_result = detector.predict(email.dict())
+        try:
+            ml_result = detector.predict(email.dict())
+        except:
+             ml_result = {"confidence": 0.8}
+
+        
+        
         confidence = max(90.0, round(ml_result["confidence"] * 100, 1))
+        risk_score = confidence 
+
+        risk_level = "HIGH"
 
         ai_explanation = generate_ai_explanation(
             category="PHISHING",
@@ -262,21 +284,44 @@ def analyze_outlook_email(email: OutlookEmailRequest):
 
         details = {
             "links": extract_links(raw_body),
-            "suspiciousWords": extract_suspicious_words(full_text)
+            "suspiciousWords": extract_suspicious_words(full_text),
+            "lookalikeDomains": lookalike_domains
         }
 
         analysis_msg = build_rule_explanation("PHISHING", details, strong_hits)
+
+        # Auto quarantine phishing email
+        if GRAPH_ENABLED and email.messageId and email.userEmailerEmail:
+            try:
+                move_email_to_quarantine(email.userEmail, email.messageId)
+            except Exception as e:
+                print("Graph move failed:", e)
+        if REPORTING_ENABLED:
+            try:
+                report_to_admin(
+                    ReportRequest(
+                        messageId=email.messageId,
+                        category="PHISHING",
+                        confidence=confidence,
+                        ruleHits=strong_hits,
+                        sender=email.senderEmail,
+                        reportedBy=email.userEmail
+                    )
+                )
+            except Exception as e:
+                print("Admin report failed:", e)
 
         return {
             "category": "PHISHING",
             "confidence": confidence,
             "isInternal": internal,
             "reason": "; ".join(strong_hits),
+            "riskScore": risk_score,
+            "riskLevel": risk_level,
             "details": details,
             "analysisMessage": analysis_msg,
             "aiExplanation": ai_explanation
         }
-
     # ===============================
     # MEDIUM RULES → SUSPICIOUS
     # ===============================
@@ -303,15 +348,21 @@ def analyze_outlook_email(email: OutlookEmailRequest):
 
         details = {
             "links": extract_links(raw_body),
-            "suspiciousWords": extract_suspicious_words(full_text)
+            "suspiciousWords": extract_suspicious_words(full_text),
+            "lookalikeDomains": lookalike_domains
         }
+        risk_score = min(70, 40 + len(medium_hits) * 10)
+        risk_level = "MEDIUM"
 
         analysis_msg = build_rule_explanation("SUSPICIOUS", details, medium_hits)
+       
 
         return {
             "category": "SUSPICIOUS",
             "isInternal": internal,
             "reason": "; ".join(medium_hits),
+            "riskScore": risk_score,
+            "riskLevel": risk_level,
             "details": details,
             "analysisMessage": analysis_msg,
             "aiExplanation": ai_explanation
@@ -330,15 +381,19 @@ def analyze_outlook_email(email: OutlookEmailRequest):
 
     details = {
         "links": extract_links(raw_body),
-        "suspiciousWords": extract_suspicious_words(full_text)
+        "suspiciousWords": extract_suspicious_words(full_text),
+        "lookalikeDomains": lookalike_domains
     }
-
+    risk_score = 15
+    risk_level = "LOW"
     analysis_msg = build_rule_explanation("SAFE", details, [])
 
     return {
         "category": "SAFE",
         "isInternal": internal,
         "reason": "No phishing indicators detected",
+        "riskScore": risk_score,
+        "riskLevel": risk_level,
         "details": details,
         "analysisMessage": analysis_msg,
         "aiExplanation": ai_explanation
@@ -479,18 +534,16 @@ async def startup_event():
 
 @app.post("/report-to-admin")
 def report_to_admin(report: ReportRequest):
+
     print("📨 /report-to-admin called")
-    print("SENDER_EMAIL =", SENDER_EMAIL)
-    print("SENDER_PASSWORD is set =", bool(SENDER_PASSWORD))
 
     if not REPORTING_ENABLED:
         return {"status": "disabled"}
 
-    # ✅ SAFETY CHECK
     if not SENDER_EMAIL or not SENDER_PASSWORD:
         return {
             "status": "error",
-            "message": "Email credentials not configured on server"
+            "message": "Email credentials not configured"
         }
 
     if report.category not in ["PHISHING"]:
@@ -499,9 +552,10 @@ def report_to_admin(report: ReportRequest):
             "reason": "Only PHISHING emails are auto-reported"
         }
 
+
     subject = f"🚨 PhishBuster Alert: {report.category} Email Reported"
     body = f"""
-    A phishing email was reported automatically.
+    A phishing email was detected.
 
     Category: {report.category}
     Confidence: {report.confidence}
@@ -517,26 +571,21 @@ def report_to_admin(report: ReportRequest):
     msg["From"] = SENDER_EMAIL
     msg["To"] = ADMIN_REPORT_EMAIL
     msg["Subject"] = subject
+
     msg.attach(MIMEText(body, "plain"))
 
     try:
-        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)  # ✅ add timeout
+        server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
         server.starttls()
         server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.sendmail(SENDER_EMAIL, ADMIN_REPORT_EMAIL, msg.as_string())
         server.quit()
 
-        print("✅ Email sent to admin via Outlook SMTP")
+        print("✅ Admin notified successfully")
 
-        return {
-            "status": "reported",
-            "sentTo": ADMIN_REPORT_EMAIL
-        }
+        return {"status": "reported"}
 
     except Exception as e:
-        print("❌ Failed to send email:", e)
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+        print("❌ Admin report failed:", e)
+        return {"status": "error"}
 
