@@ -13,8 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from ai_explainer import generate_ai_explanation
 
 from typing import Optional, List
-from graph_client import move_email_to_quarantine
-from graph_config import GRAPH_ENABLED
+from graph.graph_client import move_email_to_quarantine
+from graph.graph_config import GRAPH_ENABLED
 from step2_features import (
     extract_links, 
     extract_suspicious_words,
@@ -36,11 +36,11 @@ app = FastAPI(title="Phishing Detection — ML + Rule-Based (Outlook Integration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://phishbuster-addin.onrender.com",
-        "https://localhost:3000",
-        "http://localhost:3000",
-        "https://localhost:3001",
-        "http://localhost:3001",
+    "https://phishbuster-addin.onrender.com",
+    "https://localhost:3000",
+    "http://localhost:3000",
+    "https://127.0.0.1:3000",
+    "http://127.0.0.1:3000"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -505,7 +505,21 @@ def health_check():
 # ==========================================================
 # STARTUP EVENT
 # ==========================================================
+import asyncio
+from graph.graph_subscription import ensure_subscription
 
+async def subscription_renewer():
+    while True:
+        await asyncio.sleep(3600)  # every 1 hour
+
+        try:
+            if GRAPH_ENABLED:
+                
+                ensure_subscription("yourcompanyuser@claaps.com")
+                  
+                print("🔁 Subscription checked/renewed")
+        except Exception as e:
+            print("❌ Renewal error:", e)
 @app.on_event("startup")
 async def startup_event():
     """
@@ -518,6 +532,10 @@ async def startup_event():
     print("="*60)
     print(f"Detector Type: {'ML (SVM)' if ml_loaded else 'Rule-Based Fallback'}")
     print(f"ML Model Status: {'✅ Loaded' if ml_loaded else '❌ Not Trained'}")
+            # 🔁 Start background renewal task
+    if GRAPH_ENABLED:
+        ensure_subscription("yourcompanyuser@claaps.com")
+        asyncio.create_task(subscription_renewer())
     
     if not ml_loaded:
         print("\n⚠️  WARNING: ML models not found!")
@@ -531,6 +549,7 @@ async def startup_event():
     print("   GET  /model-info       - Model information")
     print("   GET  /health           - Health check")
     print("="*60 + "\n")
+
 
 @app.post("/report-to-admin")
 def report_to_admin(report: ReportRequest):

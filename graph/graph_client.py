@@ -1,6 +1,6 @@
 #graph_client.py
 import requests
-from graph_config import TENANT_ID, CLIENT_ID, CLIENT_SECRET
+from graph.graph_config import TENANT_ID, CLIENT_ID, CLIENT_SECRET
 
 def get_graph_token():
     url = f"https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/token"
